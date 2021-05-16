@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D3 TEST</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 1140px;
+      margin: 0 auto;
+    }
+
+    .svg-content {
+      transform: translate(40px, 60px);
+    }
+
+
+    line.first-line,
+    line.bottom-line {
+      stroke: #FDD864;
+      stroke-width: 3;
+    }
+
+    text {
+      font-size: 15px;
+    }
+
+    rect.rect {
+      transition: all 0.3s;
+    }
+
+    rect.rect:hover {
+      fill: #FDD864;
+    }
+
+    .circle {
+      stroke-width: 2px;
+      stroke: #FDD864;
+      fill: #fff;
+    }
+
+    .circle:hover {
+      fill: #FDD864;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main style="width: 980px;margin: 0 auto;">
+    <h1>D3</h1>
+    <h4>TEST</h4>
+    <div class="section-block">
+      <svg class="chart"></svg>
+      <svg class="pie"></svg>
+    </div>
+  </main>
+
+
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/axios/0.9.1/axios.min.js'
+    integrity='sha512-Xk3wWei2TGrsh9kDSBKUMIjw/86sLUvhtnv9f7fOuIwhhiUTKz8szkWkzHthrM5Bb3Bu9idSzkxOrkzhcneuiw=='
+    crossorigin='anonymous'></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.16.0/d3.min.js"></script>
+
+
+
+  <script>
+    (async function (global, d3) {
+
+      /* 變數 */
+      let data = await axios.get('./data.json')
+        .then(res => res.data.objlist.reverse());
+      let svgWidth = 680, // 外層
+        svgHeight = 400, // 外層
+        chartWidth = 600, // 圖表寬度 mobile 320
+        chartHeight = 220, // 圖表高度 mobile 180 
+        svg = d3.select("svg.chart"), // svg
+        svgContent, // svg content
+        xAxis, // X軸
+        xAxisGroups,
+        y2Axis, // Y2軸
+        y2AxisGroups,
+        yAxis, // Y軸
+        yAxisGroups,
+        tempTrade = [], // 成交戶數 (暫時)
+        dataTrade = [], // 成交戶數 (整理後)
+        tempPrice = [], // 每坪價格 (暫時)
+        dataPrice = [],  // 每坪價格 (整理後)
+        rect, // rect 長條
+        pathBox, // 折線
+        // circleBox, // 圓
+        monthDivide = 12,
+        yAxisDivide = chartHeight / 5;
+      /* 變數 END */
+
+      data.forEach((ele) => {
+        tempTrade.push(ele.TradeHouse); // 成交戶
+        tempPrice.push(parseInt(ele.UnitPrice)); // 售出單價(每坪)
+      });
+
+      /* 比例 */
+      // x軸 讓"12月份等分"對比"圖表寬度"
+      let xScale = d3.scaleLinear()
+        .domain([0, monthDivide]) // 0,12
+        .range([0, chartWidth]);
+
+      // Y2軸 讓"圖表高度"對比"成交數字"
+      let y2NumberScale = d3.scaleLinear()
+        .domain([0, chartHeight])
+        .range([d3.max(tempTrade), 0]);
+
+      // Y軸 讓"圖表高度"對比"每坪單價數字"
+      let yNumberScale = d3.scaleLinear()
+        .domain([0, chartHeight])
+        .range([d3.max(tempPrice) + 5, (d3.min(tempPrice) + d3.max(tempPrice)) / 2]);
+
+      // "Y2軸產生的數字比例"對比"圖表高度"
+      let rectHeightScale = d3.scaleLinear()
+        .domain([y2NumberScale(0), 0])
+        .range([chartHeight, 0]);
+
+      // "折線的單價大小"對比"圖表高度"
+      let polyHeightScale = d3.scaleLinear()
+        .domain([(d3.min(tempPrice) + d3.max(tempPrice)) / 2, d3.max(tempPrice) + 5])
+        .range([chartHeight, 0]);
+      /* 比例 END */
+
+      if (d3.max(tempTrade) % 5 === 0) { // 比例可以分好的狀況
+        for (let i = 0; i <= 5; i++) {
+          let temp = Math.round(y2NumberScale((0 + yAxisDivide) * i));
+          dataTrade.push(temp)
+        }
+      } else { // 比例無法分好的狀況，只顯示頭尾的成交數字
+        dataTrade = [
+          Math.round(y2NumberScale((0 + yAxisDivide) * 0)), "", "", "", "",
+          Math.round(y2NumberScale((0 + yAxisDivide) * 5)),
+        ];
+      }
+      for (let i = 0; i <= 5; i++) {
+        let temp = Math.round(yNumberScale((0 + yAxisDivide) * i));
+        dataPrice.push(temp)
+      }
+      function draw() {
+        svg.attr("width", svgWidth).attr("height", svgHeight);
+        svgContent = svg.append('g').attr("class", "svg-content");
+        xAxis = svgContent.append('g').attr("class", "x-axis");
+        y2Axis = svgContent.append('g').attr("class", "y2-axis");
+        yAxis = svgContent.append('g').attr("class", "y-axis");
+        rect = svgContent.append('g').attr("class", "rect");
+        pathBox = svgContent.append('g').attr("class", "pathBox");
+        // circleBox = svgContent.append('g').attr("class", "circleBox");
+
+        // X軸
+        xAxisGroups = xAxis.selectAll("g")
+          .data(data)
+          .enter()
+          .append('g')
+          .attr('class', 'x-tick')
+          .attr('transform', function (d, i) {
+            let distan = chartWidth / monthDivide * i;
+            return `translate(${distan},0)`;
+          });
+
+        xAxisGroups // 軸線繪製
+          .append('line')
+          .attr("x1", 0).attr("x2", 0)
+          .attr("y1", 0).attr("y2", chartHeight)
+          .attr("fill", "none")
+          .attr("stroke", "#ccc").attr("stroke-width", "1")
+          .attr('class', function (d, i) {
+            if (i === 0) {
+              return 'first-line';
+            }
+          });
+
+        xAxisGroups // 月份文字
+          .append('text')
+          .text(d => d.twDate.split('年')[1])
+          .attr("y", chartHeight + 20 + 'px')
+          .attr("x", xScale(12) / monthDivide / 2 + 'px') // 需放比例 xScale
+          .attr("text-anchor", "middle");
+        // X軸 END
+
+        // Y2軸
+        y2AxisGroups = y2Axis.selectAll("g")
+          .data(dataTrade)
+          .enter()
+          .append("g")
+          .attr('class', 'y2-tick')
+          .attr('transform', function (d, i) {
+            let distan = chartHeight / 5 * i;
+            return `translate(0, ${distan})`;
+          });
+
+        y2AxisGroups // 軸線繪製
+          .append('line')
+          .attr("x1", 0).attr("x2", chartWidth)
+          .attr("y1", 0).attr("y2", 0)
+          .attr("fill", "none")
+          .attr("stroke", "#ccc").attr("stroke-width", "1")
+          .attr('class', (d, i) => { if (i === 5) return 'bottom-line'; });
+
+        y2AxisGroups
+          .append('text') // 成交文字
+          .text(d => d)
+          .attr("y", () => 5)
+          .attr("x", chartWidth + 5 + 'px')
+        // Y2軸 END
+
+        // Y軸
+        yAxisGroups = yAxis.selectAll("g")
+          .data(dataPrice)
+          .enter()
+          .append("g")
+          .attr('class', 'y-tick')
+          .attr('transform', function (d, i) {
+            let distan = chartHeight / 5 * i;
+            return `translate(0, ${distan})`;
+          });
+
+        yAxisGroups
+          .append('line') // 軸線繪製
+          .attr("x1", 0).attr("x2", chartWidth)
+          .attr("y1", 0).attr("y2", 0)
+          .attr("fill", "none")
+          .attr("stroke", "#ccc")
+          .attr("stroke-width", "1");
+
+        yAxisGroups // 每坪單價文字
+          .append('text')
+          .text(d => d)
+          .attr("y", () => 5)
+          .attr("x", -22 + 'px')
+        // Y軸 END
+
+        // rect 長條 
+        rect.selectAll("rect")
+          .data(data)
+          .enter()
+          .append("rect")
+          .attr('class', 'rect')
+          .attr('width', 15)
+          .attr('height', d => rectHeightScale(d.TradeHouse))
+          .attr("x", function (d, i) {
+            // 需用到 xScale 的對比
+            let widthUnit = xScale(monthDivide) / monthDivide;
+            return widthUnit * i + (widthUnit - 15) / 2;
+          })
+          .attr("y", function (d, i) {
+            return - Math.round(rectHeightScale(d.TradeHouse)) + chartHeight;
+          })
+          .attr('fill', '#ddd');
+        // rect 長條 END 
+
+
+        // 折線  
+
+        let line = d3.line()
+          .x(function (d, i) {
+            // 需用到 xScale 的對比
+            let widthUnit = xScale(monthDivide) / monthDivide;
+            return (widthUnit / 2) + (widthUnit * i);
+          })
+          .y(function (d, i) {
+            return polyHeightScale(d.UnitPrice);
+          }).defined(function (d) { // 篩選資料
+            return d.TradeHouse > 0;
+          });
+        pathBox.append("path")
+          .data([data])
+          .attr("d", line)
+          .attr("fill", "none")
+          .attr("stroke", "#FDD864")
+          .attr("stroke-width", "2.5");
+
+
+
+
+
+        // TEST 
+        let _tmparr = [],
+          _count = 0,
+          _start;
+
+        let front = []; // 前面的資料
+        let back = []; // 後面的資料
+
+
+        let pathBox2 = svgContent.append('g').attr("class", "pathBox2");
+        let LineDash = d3.line()
+          .x(function (d, i) {
+            // 需用到 xScale 的對比
+            let widthUnit = xScale(monthDivide) / monthDivide;
+            return (widthUnit / 2) + (widthUnit * i);
+          })
+          .y(function (d, i) {
+            let y; // 宣告一個空變數
+
+            if (d.UnitPrice === 0) {
+              console.log([i]);
+              // front.push(i);
+              // console.log(front);
+            }
+
+            if (i > 0 && i < data.length - 1 && d.UnitPrice === 0) {
+              // for (let j = 0; j < data.length; j++) {
+              //   if (data[j].UnitPrice === 0) {
+              //     front.push(i);
+              //   }
+              // }
+              // console.log(front);
+
+              // if (front.length === 0) { // 這邊會把 UnitPrice === 0 的 i 紀錄下來。
+              //   _start = i;
+              //   for (var j = i; j < data.length; j++) {
+              //     if (data[j].UnitPrice === 0) {
+              //       front.push(j);
+              //     } else {
+              //       break;
+              //     }
+              //   }
+              // }
+              // console.log(front);
+
+              if (_tmparr.length === 0) { // 這邊會把 UnitPrice === 0 的 i 紀錄下來。
+                _start = i;
+                for (var j = i; j < data.length; j++) {
+                  if (data[j].UnitPrice === 0) {
+                    _tmparr.push(j);
+                  } else {
+                    break;
+                  }
+                }
+              }
+
+              // console.log(_tmparr);
+
+              // console.log(_tmparr); // 這邊有兩個陣列，先找出哪個 序列 i 沒有資料
+              // console.log(_tmparr.length + 1); // (0,2) (0,2) 猜測指有兩邊(沒有資料的前後)數值
+              // console.log(data[_tmparr[0] - 1].UnitPrice); // 沒有資料的前一筆 UnitPrice 54.4  54.7029
+              // console.log(data[_start + _tmparr.length].UnitPrice); // 沒有資料的後一筆 UnitPrice
+
+              /*
+                把前後資料的 UnitPrice 抓出，然後因為是兩個點，所以將此兩個點去比對 UnitPrice，就可知道中間的點(數值)
+                t(0) 為起始點
+                t(1) 為中間點
+                t(2) 為結尾點
+              */
+              var t = d3.scaleLinear()
+                .domain([0, _tmparr.length + 1])
+                .range([data[_tmparr[0] - 1].UnitPrice, data[_start + _tmparr.length].UnitPrice]);
+
+              y = polyHeightScale(t(++_count)); // 套用折線對比高度的
+            } else { // 先不看這列
+              _count = 0;
+              _tmparr = [];
+              y = polyHeightScale(d.UnitPrice);
+            }
+            return y;
+          }).defined(function (d, i) {
+            var flag = false;
+            if ((i === 0 || i === 11) && d.UnitPrice === 0) return false;
+            if ((i === 0 || i === 11) && d.UnitPrice > 0) return true;
+            for (var j = 0; j < i; j++) {
+              if (data[j].UnitPrice > 0 || (data[j + 1] && data[j + 1].UnitPrice > 0)) {
+                flag = true;
+                break;
+              }
+            }
+            return true;
+          });
+        pathBox2.append("path")
+          .data([data])
+          .attr("d", LineDash)
+          .attr("fill", "none")
+          .attr("stroke", "#FDD864")
+          .attr("stroke-width", "2.5")
+          .attr("stroke-dasharray", "10 5 5 5");
+        // 折線 END
+
+
+        // 圓圖
+        // svgContent.selectAll('g')
+        //   .data(data)
+        //   .enter()
+        //   .append("circle")
+
+        // // circleBox.selectAll("circle")
+        // //   .data(data)
+        // //   .enter()
+        // //   .append("circle")
+        // //   .attr('class', 'circle')
+        // //   .attr("cx", function (d, i) {
+        // //     // 需用到 xScale 的對比
+        // //     let widthUnit = xScale(monthDivide) / monthDivide;
+        // //     return (widthUnit / 2) + (widthUnit * i);
+        // //   })
+        // //   .attr("cy", function (d, i) {
+        // //     return polyHeightScale(d.UnitPrice);
+        // //   })
+        // //   .attr("r", function () {
+        // //     return 6;
+        // //   })
+        // //   .defined(function (d) { // 篩選資料
+        // //     return d.TradeHouse > 0;
+        // //   });
+
+
+        // 右側封閉線 START 
+        svgContent.append('line')
+          .attr("x1", chartWidth).attr("x2", chartWidth)
+          .attr("y1", 0).attr("y2", chartHeight)
+          .attr("fill", "none")
+          .attr("stroke", "#ccc")
+          .attr("stroke-width", "1")
+        // 右側封閉線 END 
+      }
+      draw();
+    })(window, d3);
+  </script>
+</body>
+
+</html>
