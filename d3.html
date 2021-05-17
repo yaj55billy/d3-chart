@@ -98,13 +98,24 @@
         pathBox, // 折線
         // circleBox, // 圓
         monthDivide = 12,
-        yAxisDivide = chartHeight / 5;
+        yAxisDivide = chartHeight / 5,
+        priceHeightJud; // 折線高度判斷
       /* 變數 END */
 
       data.forEach((ele) => {
         tempTrade.push(ele.TradeHouse); // 成交戶
         tempPrice.push(parseInt(ele.UnitPrice)); // 售出單價(每坪)
       });
+
+      /* 折線高度判斷 */
+      if (((d3.min(tempPrice) + d3.max(tempPrice)) / 2) > d3.min(tempPrice)) {
+        // 折線高度區間判斷，不讓折線高度超過原本範圍
+        priceHeightJud = d3.min(tempPrice);
+        if (d3.min(tempPrice) === 0) {
+          priceHeightJud = ((d3.min(tempPrice) + d3.max(tempPrice)) / 2);
+        }
+      }
+      /* 折線高度判斷 END */
 
       /* 比例 */
       // x軸 讓"12月份等分"對比"圖表寬度"
@@ -120,7 +131,7 @@
       // Y軸 讓"圖表高度"對比"每坪單價數字"
       let yNumberScale = d3.scaleLinear()
         .domain([0, chartHeight])
-        .range([d3.max(tempPrice) + 5, (d3.min(tempPrice) + d3.max(tempPrice)) / 2]);
+        .range([d3.max(tempPrice) + 5, priceHeightJud]);
 
       // "Y2軸產生的數字比例"對比"圖表高度"
       let rectHeightScale = d3.scaleLinear()
@@ -129,9 +140,10 @@
 
       // "折線的單價大小"對比"圖表高度"
       let polyHeightScale = d3.scaleLinear()
-        .domain([(d3.min(tempPrice) + d3.max(tempPrice)) / 2, d3.max(tempPrice) + 5])
+        .domain([priceHeightJud, d3.max(tempPrice) + 5])
         .range([chartHeight, 0]);
       /* 比例 END */
+
 
       if (d3.max(tempTrade) % 5 === 0) { // 比例可以分好的狀況
         for (let i = 0; i <= 5; i++) {
@@ -146,7 +158,7 @@
       }
       for (let i = 0; i <= 5; i++) {
         let temp = Math.round(yNumberScale((0 + yAxisDivide) * i));
-        dataPrice.push(temp)
+        dataPrice.push(temp);
       }
       function draw() {
         svg.attr("width", svgWidth).attr("height", svgHeight);
@@ -260,9 +272,7 @@
           .attr('fill', '#ddd');
         // rect 長條 END 
 
-
         // 折線  
-
         let line = d3.line()
           .x(function (d, i) {
             // 需用到 xScale 的對比
@@ -270,6 +280,7 @@
             return (widthUnit / 2) + (widthUnit * i);
           })
           .y(function (d, i) {
+            // d.UnitPrice
             return polyHeightScale(d.UnitPrice);
           }).defined(function (d) { // 篩選資料
             return d.TradeHouse > 0;
@@ -285,15 +296,6 @@
 
 
 
-        // TEST 
-        let _tmparr = [],
-          _count = 0,
-          _start;
-
-        let front = []; // 前面的資料
-        let back = []; // 後面的資料
-
-
         let pathBox2 = svgContent.append('g').attr("class", "pathBox2");
         let LineDash = d3.line()
           .x(function (d, i) {
@@ -304,77 +306,37 @@
           .y(function (d, i) {
             let y; // 宣告一個空變數
 
-            if (d.UnitPrice === 0) {
-              console.log([i]);
-              // front.push(i);
-              // console.log(front);
-            }
+            // 從資料為 0 的 i，找出前後的 i，再帶入比例求得中間 i (平均)。
+            // dashTempArr[0] - 1、data[dashTempArr[0] + 1 前後筆的資料
 
             if (i > 0 && i < data.length - 1 && d.UnitPrice === 0) {
-              // for (let j = 0; j < data.length; j++) {
-              //   if (data[j].UnitPrice === 0) {
-              //     front.push(i);
-              //   }
-              // }
-              // console.log(front);
-
-              // if (front.length === 0) { // 這邊會把 UnitPrice === 0 的 i 紀錄下來。
-              //   _start = i;
-              //   for (var j = i; j < data.length; j++) {
-              //     if (data[j].UnitPrice === 0) {
-              //       front.push(j);
-              //     } else {
-              //       break;
-              //     }
-              //   }
-              // }
-              // console.log(front);
-
-              if (_tmparr.length === 0) { // 這邊會把 UnitPrice === 0 的 i 紀錄下來。
-                _start = i;
-                for (var j = i; j < data.length; j++) {
-                  if (data[j].UnitPrice === 0) {
-                    _tmparr.push(j);
-                  } else {
-                    break;
-                  }
-                }
+              let dashTempArr = [];
+              let count = 0;
+              if (dashTempArr.length === 0) {
+                dashTempArr.push(i); // 會把資料中 UnitPrice === 0 的 i 紀錄下來。
               }
+              let dashScale = d3.scaleLinear()
+                .domain([0, dashTempArr.length + 1])
+                .range([data[dashTempArr[0] - 1].UnitPrice, data[dashTempArr[0] + 1].UnitPrice]);
+              y = polyHeightScale(dashScale(++count));
 
-              // console.log(_tmparr);
-
-              // console.log(_tmparr); // 這邊有兩個陣列，先找出哪個 序列 i 沒有資料
-              // console.log(_tmparr.length + 1); // (0,2) (0,2) 猜測指有兩邊(沒有資料的前後)數值
-              // console.log(data[_tmparr[0] - 1].UnitPrice); // 沒有資料的前一筆 UnitPrice 54.4  54.7029
-              // console.log(data[_start + _tmparr.length].UnitPrice); // 沒有資料的後一筆 UnitPrice
-
-              /*
-                把前後資料的 UnitPrice 抓出，然後因為是兩個點，所以將此兩個點去比對 UnitPrice，就可知道中間的點(數值)
-                t(0) 為起始點
-                t(1) 為中間點
-                t(2) 為結尾點
-              */
-              var t = d3.scaleLinear()
-                .domain([0, _tmparr.length + 1])
-                .range([data[_tmparr[0] - 1].UnitPrice, data[_start + _tmparr.length].UnitPrice]);
-
-              y = polyHeightScale(t(++_count)); // 套用折線對比高度的
-            } else { // 先不看這列
-              _count = 0;
-              _tmparr = [];
+            } else {
+              let dashTempArr = [];
+              let count = 0;
               y = polyHeightScale(d.UnitPrice);
             }
+
             return y;
           }).defined(function (d, i) {
             var flag = false;
             if ((i === 0 || i === 11) && d.UnitPrice === 0) return false;
             if ((i === 0 || i === 11) && d.UnitPrice > 0) return true;
-            for (var j = 0; j < i; j++) {
-              if (data[j].UnitPrice > 0 || (data[j + 1] && data[j + 1].UnitPrice > 0)) {
-                flag = true;
-                break;
-              }
-            }
+            // for (var j = 0; j < i; j++) {
+            //   if (data[j].UnitPrice > 0 || (data[j + 1] && data[j + 1].UnitPrice > 0)) {
+            //     flag = true;
+            //     break;
+            //   }
+            // }
             return true;
           });
         pathBox2.append("path")
